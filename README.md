@@ -1,6 +1,6 @@
 # gatsby-transformer-remark-frontmatter
 
-Allows querying Markdown frontmatter fields as frontmatter
+Allows querying Markdown frontmatter fields as markdown
 
 ## Install
 
