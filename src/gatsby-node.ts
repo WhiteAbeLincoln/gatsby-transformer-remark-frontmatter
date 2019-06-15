@@ -37,7 +37,7 @@ const createFrontmatterMdFileNode = async (
       mediaType: 'text/markdown',
       type: NODE_TYPE,
     },
-    frontmatterfield: field,
+    frontmatterField: field,
     frontmatterValue: value,
   } as unknown) as Node
 
@@ -104,10 +104,9 @@ export const onCreateNode: GatsbyNode['onCreateNode'] = async (
   }
 
   if (whitelist && blacklist) {
-    reporter.panicOnBuild(
+    throw new Error(
       'Cannot provide both a whitelist and a blacklist to gatsby-transformer-remark-frontmatter',
     )
-    return
   }
 
   const filter = shouldUseField(
