@@ -1,0 +1,33 @@
+{
+  "name": "gatsby-transformer-remark-frontmatter",
+  "version": "1.0.0",
+  "description": "Allows querying frontmatter fields as markdown with gatsby-transformer-remark",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepack": "npm run build && cp -Rav build/* . | ./scripts/parseEmitted.sh build.emit",
+    "postpack": "./scripts/postpack.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WhiteAbeLincoln/describe2ts.git"
+  },
+  "keywords": [
+    "gatsby",
+    "frontmatter",
+    "remark",
+    "plugin",
+    "transformer"
+  ],
+  "author": "Abraham White <abelincoln.white@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "gatsby": "^2.4.0"
+  },
+  "devDependencies": {
+    "gatsby": "^2.9.4",
+    "patch-package": "^6.1.2",
+    "typescript": "^3.5.2"
+  }
+}

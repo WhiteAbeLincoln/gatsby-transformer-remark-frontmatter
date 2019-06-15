@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // see https://github.com/Microsoft/TypeScript/issues/14538#issuecomment-455894308
+    "outDir": "./build",
+    "rootDir": "./src",
+    "resolveJsonModule": false
+  },
+  "exclude": ["src/**/*.spec.ts", "src/**/__test__/*"]
+}
