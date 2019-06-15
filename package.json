@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WhiteAbeLincoln/describe2ts.git"
+    "url": "git+https://github.com/WhiteAbeLincoln/gatsby-transformer-remark-frontmatter.git"
   },
   "keywords": [
     "gatsby",
