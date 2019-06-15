@@ -1,18 +1,45 @@
 import { Node, GatsbyNode, NodePluginArgs } from 'gatsby'
-import { NODE_TYPE, isFrontmatterMarkdownNode } from './index'
+import {
+  NODE_TYPE,
+  isFrontmatterMarkdownNode,
+  FrontmatterMarkdownFileNode,
+  fromEntries,
+} from './index'
 
-const createFrontmatterMdFileNode = async (
+// map of node ids to field names to created frontmatter markdown nodes.
+// When the FrontmatterFile node is created, a new entry is added with
+// all fields set to null
+// we know that the frontmattermd field is ready to be created if all
+// field_names are set to the string ids of the created markdown nodes
+const node_field_map: {
+  [markdown_node_id: string]: { [field_name: string]: string | null }
+} = {}
+
+const entryIsReady = (
+  val: (typeof node_field_map)[string],
+): val is { [field_name: string]: string } =>
+  Object.keys(val).every(created_id => created_id != null)
+
+const shouldUseField = (filter: {
+  kind: 'whitelist' | 'blacklist'
+  fields: string[]
+}) => ([key, value]: [string, any]) => {
+  if (filter.kind === 'blacklist' && filter.fields.includes(key)) return false
+  if (filter.kind === 'whitelist' && !filter.fields.includes(key)) return false
+  return !!(typeof value === 'string' && value)
+}
+
+const createFrontmatterMdFileNode = (
   {
     createNodeId,
     createContentDigest,
     getNode,
-    reporter,
     actions: { createNode, createParentChildLink },
   }: NodePluginArgs,
   [field, value]: [string, string],
-  parent: Node | null | undefined = null,
+  parent: Node,
 ) => {
-  const parentParent = parent && parent.parent && getNode(parent.parent)
+  const parentParent = parent.parent && getNode(parent.parent)
   const fileParent =
     parentParent && parentParent.internal.type === 'File' ? parentParent : null
 
@@ -26,77 +53,130 @@ const createFrontmatterMdFileNode = async (
     // the fields that they use, or recursively check all parents until a File
     // is found
     ...fileParent,
-    id: createNodeId(`${NODE_TYPE}:${field}`),
-    // @ts-ignore
-    parent: parent && parent.id,
+    id: createNodeId(`${parent.id}:${field} >>> ${NODE_TYPE}`),
+    parent: parent.id,
     children: [],
-    // @ts-ignore
     internal: {
       content: value,
       contentDigest: createContentDigest(value),
       mediaType: 'text/markdown',
       type: NODE_TYPE,
     },
-    frontmatterField: field,
-    frontmatterValue: value,
-  } as unknown) as Node
+  } as unknown) as FrontmatterMarkdownFileNode
+  frontmatterMdNode.frontmatterField = field
+  frontmatterMdNode.frontmatterValue = value
 
   // errors if fields are set on a new node
   // unfortunately we can't reuse any third-party
   // changes to file nodes
   delete frontmatterMdNode.fields
 
-  await createNode(frontmatterMdNode)
+  // add the new entry to the node_field_map
+  // setting value to null, since we don't
+  // yet have the id of the final MarkdownRemark node
+  if (!node_field_map[parent.id]) node_field_map[parent.id] = {}
+  node_field_map[parent.id][field] = null
 
-  if (parent) createParentChildLink({ parent, child: frontmatterMdNode })
+  // creation is deferred since we could have a race
+  // condition if we create a node before the node_field_map
+  // has been entirely populated. onCreateNode is async
+  // so the linkNodes fn could be called and think that
+  // it's ready to add the frontmattermd, but in reality
+  // we just haven't yet added all of the fields to the
+  // node_field_map (our Object.entries iteration hasn't
+  // completed yet)
+  return () => {
+    createNode(frontmatterMdNode)
+    if (parent) createParentChildLink({ parent, child: frontmatterMdNode })
+  }
+}
 
-  // actually a string[], gatsby's typings are incorrect here
-  // children is never a Node[], always just a list of ids
-  const childField = ((frontmatterMdNode.children || []) as unknown) as string[]
+/**
+ * Creates the FrontmatterMarkdownFile nodes from the
+ * valid frontmatter fields of a MarkdownRemark node
+ * @param node the MarkdownRemark node
+ * @param helpers NodePluginArgs
+ * @param filter a predicate to filter vaild frontmatter fields
+ */
+const createFrontmatterNodes = (
+  node: Node,
+  helpers: NodePluginArgs,
+  filter: ReturnType<typeof shouldUseField>,
+) => {
+  const { getNode } = helpers
+  if (
+    // we don't need to recursively run over our
+    // newly created markdown nodes. It's unlikely they'll have any frontmatter
+    // anyway
+    isFrontmatterMarkdownNode({ node, getNode }) ||
+    typeof node.frontmatter !== 'object' ||
+    !node.frontmatter
+  )
+    return
 
-  const children = childField.reduce(
-    (acc, cid) => {
-      const n = getNode(cid)
-      if (n && n.internal.type === 'MarkdownRemark') acc.push(n)
+  const createFns = Object.entries(node.frontmatter).reduce(
+    (acc, pair) => {
+      if (filter(pair)) {
+        acc.push(createFrontmatterMdFileNode(helpers, pair, node))
+      }
+
       return acc
     },
-    [] as Node[],
+    [] as Array<() => void>,
   )
 
-  if (children.length > 1) {
-    reporter.warn(
-      `${NODE_TYPE} node for field ${field} received more than one MarkdownRemark child after creation. Only the first child will be queryable.`,
-    )
-  }
-
-  if (children.length === 0) {
-    reporter.warn(
-      `${NODE_TYPE} node for field ${field} did not recieve any MarkdownRemark children after creation. The field ${field} will not be queryable as markdown.`,
-    )
-  }
-
-  return children[0] as Node | undefined
+  // actually create the FrontmatterMarkdownFile nodes
+  createFns.map(fn => fn())
 }
 
-const shouldUseField = (filter: {
-  kind: 'whitelist' | 'blacklist'
-  fields: string[]
-}) => ([key, value]: [string, any]) => {
-  if (filter.kind === 'blacklist' && filter.fields.includes(key)) return false
-  if (filter.kind === 'whitelist' && !filter.fields.includes(key)) return false
-  return typeof value === 'string' && value
-}
-
-export const onCreateNode: GatsbyNode['onCreateNode'] = async (
-  helpers,
-  pluginOptions = { plugins: [] },
-) => {
+/**
+ * Links the MarkdownRemark nodes created by gatsby-transformer-remark
+ * to the original MarkdownRemark node where the frontmatter came from
+ * using the frontmattermd field
+ *
+ * @param node a MarkdownRemark node
+ * @param helpers NodePluginArgs
+ */
+const linkNodes = (node: Node, helpers: NodePluginArgs) => {
   const {
-    node,
-    actions: { createNodeField },
     getNode,
-    reporter,
+    actions: { createNodeField },
   } = helpers
+  // we only operate on MarkdownRemark nodes that are children of FrontmatterMarkdownFile nodes
+  if (!isFrontmatterMarkdownNode({ node, getNode })) return
+  // get the parent, the FrontmatterMarkdownFile node
+  const fileNode = getNode(node.parent)! as FrontmatterMarkdownFileNode
+  // get the parent's parent, the original MarkdownNode
+  const markdownNode = getNode(fileNode.parent)!
+
+  const field = fileNode.frontmatterField
+
+  // add the node id to the map
+  const map_entry = node_field_map[markdownNode.id]
+  map_entry[field] = node.id
+
+  // if all fields are set to strings, frontmattermd field is ready to be created
+  if (!entryIsReady(map_entry)) return
+
+  // map the field name to `${field_name}___NODE` so that gatsby links the referenced node
+  const frontmatterMdValue = fromEntries(
+    Object.entries(map_entry).map(
+      ([field_name, id]) => [`${field_name}___NODE`, id] as [string, string],
+    ),
+  )
+
+  createNodeField({
+    name: 'frontmattermd',
+    node: markdownNode,
+    value: frontmatterMdValue,
+  })
+}
+
+export const onCreateNode: Exclude<
+  GatsbyNode['onCreateNode'],
+  undefined
+> = async (helpers, pluginOptions = { plugins: [] }) => {
+  const { node } = helpers
 
   const { whitelist, blacklist } = pluginOptions as {
     whitelist?: string[]
@@ -115,48 +195,7 @@ export const onCreateNode: GatsbyNode['onCreateNode'] = async (
       : { kind: 'blacklist', fields: blacklist || [] },
   )
 
-  if (
-    !node ||
-    node.internal.type !== 'MarkdownRemark' ||
-    // we don't need to recursively run over our
-    // newly created markdown nodes. It's unlikely they'll have any frontmatter
-    // anyway
-    isFrontmatterMarkdownNode({ node, getNode }) ||
-    typeof node.frontmatter !== 'object' ||
-    !node.frontmatter
-  )
-    return
-
-  const newNodes = await Promise.all(
-    Object.entries(node.frontmatter).reduce(
-      (acc, [key, value]) => {
-        if (filter([key, value])) {
-          acc.push(
-            createFrontmatterMdFileNode(helpers, [key, value], node).then(
-              newNode => newNode && ([key, newNode] as [string, Node]),
-            ),
-          )
-        }
-        return acc
-      },
-      [] as Array<Promise<[string, Node] | undefined>>,
-    ),
-  )
-
-  const frontmatterMdValue = newNodes.reduce(
-    (value, nodeData) => {
-      if (nodeData) {
-        const [key, mdNode] = nodeData
-        value[`${key}___NODE`] = mdNode.id
-      }
-      return value
-    },
-    {} as { [k: string]: string },
-  )
-
-  createNodeField({
-    name: 'frontmattermd',
-    node,
-    value: frontmatterMdValue,
-  })
+  if (!node || node.internal.type !== 'MarkdownRemark') return
+  createFrontmatterNodes(node, helpers, filter)
+  linkNodes(node, helpers)
 }

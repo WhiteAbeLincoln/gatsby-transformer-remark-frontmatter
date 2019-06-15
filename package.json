@@ -1,6 +1,6 @@
 {
   "name": "gatsby-transformer-remark-frontmatter",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Allows querying frontmatter fields as markdown with gatsby-transformer-remark",
   "main": "index.js",
   "scripts": {
