@@ -3,7 +3,6 @@ import {
   NODE_TYPE,
   isFrontmatterMarkdownNode,
   FrontmatterMarkdownFileNode,
-  fromEntries,
 } from './index'
 
 // map of node ids to field names to created frontmatter markdown nodes.
@@ -14,6 +13,16 @@ import {
 const node_field_map: {
   [markdown_node_id: string]: { [field_name: string]: string | null }
 } = {}
+
+const getFieldMap = (node: Node) => node_field_map[node.id]
+
+const setFieldTo = (node: Node, field_name: string, value: string | null) => {
+  if (!node_field_map[node.id]) node_field_map[node.id] = {}
+
+  // we append ___NODE so that gatsby creates a reference
+  // and we can avoid an unnecessary map later if we do it now
+  node_field_map[node.id][`${field_name}___NODE`] = value
+}
 
 const entryIsReady = (
   val: (typeof node_field_map)[string],
@@ -74,8 +83,9 @@ const createFrontmatterMdFileNode = (
   // add the new entry to the node_field_map
   // setting value to null, since we don't
   // yet have the id of the final MarkdownRemark node
+  setFieldTo(parent, field, null)
   if (!node_field_map[parent.id]) node_field_map[parent.id] = {}
-  node_field_map[parent.id][field] = null
+  node_field_map[parent.id][`${field}___NODE`] = null
 
   // creation is deferred since we could have a race
   // condition if we create a node before the node_field_map
@@ -152,23 +162,16 @@ const linkNodes = (node: Node, helpers: NodePluginArgs) => {
   const field = fileNode.frontmatterField
 
   // add the node id to the map
-  const map_entry = node_field_map[markdownNode.id]
-  map_entry[field] = node.id
+  setFieldTo(markdownNode, field, node.id)
+  const map_entry = getFieldMap(markdownNode)
 
   // if all fields are set to strings, frontmattermd field is ready to be created
   if (!entryIsReady(map_entry)) return
 
-  // map the field name to `${field_name}___NODE` so that gatsby links the referenced node
-  const frontmatterMdValue = fromEntries(
-    Object.entries(map_entry).map(
-      ([field_name, id]) => [`${field_name}___NODE`, id] as [string, string],
-    ),
-  )
-
   createNodeField({
     name: 'frontmattermd',
     node: markdownNode,
-    value: frontmatterMdValue,
+    value: map_entry,
   })
 }
 

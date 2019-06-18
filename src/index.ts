@@ -26,25 +26,4 @@ export const isFrontmatterMarkdownNode = ({
   return !!(parent && isFrontmatterMarkdownFileNode(parent))
 }
 
-type UnionToIntersection<U> = (U extends any
-  ? (k: U) => void
-  : never) extends ((k: infer I) => void)
-  ? I
-  : never
-type EntryToObject<E extends [keyof any, any]> = { [k in E[0]]: E[1] }
-type EntriesToObject<E extends Array<[keyof any, any]>> = UnionToIntersection<
-  {
-    [idx in keyof E]: E[idx] extends [keyof any, any]
-      ? EntryToObject<E[idx]>
-      : never
-  }[number]
->
-
-// since node LTS doesn't yet support Object.fromEntries
-export const fromEntries = <E extends Array<[keyof any, any]>>(entries: E) =>
-  entries.reduce(
-    (obj, [key, val]) => (((obj as any)[key] = val), obj),
-    {} as EntriesToObject<E>,
-  )
-
 export * from './gatsby-node'
