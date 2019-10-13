@@ -117,3 +117,14 @@ with a parent `File` node.
 export const isFrontmaterMarkdownFileNode: (n: Node) => boolean
 export const isFrontmatterMarkdownNode: (obj: { node: Node, getNode: (id: string) => Node | undefined | null }) => boolean
 ```
+
+### Null Page creation
+Some people have seen issues when automatically creating pages from markdown files. See [issue #1](https://github.com/WhiteAbeLincoln/gatsby-transformer-remark-frontmatter/issues/1).
+If you get the error `Your site's "gatsby-node.js" created a page with a component that doesn't exist.`,
+you will need to filter the markdown nodes that are used to create pages. Use the following:
+```
+allMarkdownRemark(filter: { parent: { internal: { type: { ne: "FrontmatterMarkdownFile" }}}}) {
+...
+}
+```
+
