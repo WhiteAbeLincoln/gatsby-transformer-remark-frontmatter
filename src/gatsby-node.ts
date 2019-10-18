@@ -84,8 +84,6 @@ const createFrontmatterMdFileNode = (
   // setting value to null, since we don't
   // yet have the id of the final MarkdownRemark node
   setFieldTo(parent, field, null)
-  if (!node_field_map[parent.id]) node_field_map[parent.id] = {}
-  node_field_map[parent.id][`${field}___NODE`] = null
 
   // creation is deferred since we could have a race
   // condition if we create a node before the node_field_map
@@ -175,6 +173,7 @@ const linkNodes = (node: Node, helpers: NodePluginArgs) => {
   })
 }
 
+// Entrypoint
 export const onCreateNode: Exclude<
   GatsbyNode['onCreateNode'],
   undefined

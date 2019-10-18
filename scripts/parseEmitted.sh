@@ -1,4 +1,3 @@
-
 #!/bin/sh
 
 # writes the names of the tsc emitted files to a file or stdout
