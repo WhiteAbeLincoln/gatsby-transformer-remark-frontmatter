@@ -1,6 +1,7 @@
 # gatsby-transformer-remark-frontmatter
 
-Allows querying Markdown frontmatter fields as markdown
+Allows querying Markdown frontmatter fields as markdown. Currently only works on top-level string typed keys
+in the frontmatter, but support for string fields in objects or lists can be added if people ask for it enough or someone submits a pull request.
 
 ## Install
 
@@ -47,6 +48,9 @@ templateKey: index-template
 sidebar: |
   # Some Markdown Content
   ![My Fancy Image](../image.png)
+list: 
+  - item: |
+     # Not Currently Supported
 ---
 
 # Main Content
