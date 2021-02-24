@@ -89,3 +89,7 @@ typings/
 
 build/
 *.emit
+
+.npm-global
+.direnv
+.envrc
