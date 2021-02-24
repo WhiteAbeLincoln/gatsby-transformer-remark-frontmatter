@@ -13,30 +13,12 @@ in the frontmatter, but support for string fields in objects or lists can be add
 // in your gatsby-config.js
 plugins: [
   'gatsby-transformer-remark',
-  {
-    resolve: 'gatsby-transformer-remark-frontmatter',
-    // default: { blacklist: [] }
-    options: {
-      // frontmatter fields to exclude, including all others
-      blacklist: ['templateKey']
-      // frontmatter fields to include, excluding all others
-      // whitelist: ['markdownField']
-    }
-  }
+  'gatsby-transformer-remark-frontmatter'
 ]
 ```
 
-The options object has the following type
-
-```typescript
-type PluginOptions = { whitelist: string[] } | { blacklist: string[] } | undefined
-```
-
-Note that providing both a whitelist and a blacklist is invalid.
-
-All MarkdownRemark nodes will have a frontmattermd object added to the
-fields object, containing MarkdownRemark nodes created from valid frontmatter
-fields
+Add the `@md` directive to fields in your GraphQL schema that you want to
+parse as Markdown.
 
 ## Example
 
@@ -48,9 +30,9 @@ templateKey: index-template
 sidebar: |
   # Some Markdown Content
   ![My Fancy Image](../image.png)
-list: 
+list:
   - item: |
-     # Not Currently Supported
+     # Currently Supported
 ---
 
 # Main Content
@@ -58,20 +40,35 @@ list:
 Some Text
 ```
 
-The following query can be used to get the body content and the
-sidebar markdown as html
+The following GraphQL schema can be combined with the query below to get the body
+content and the sidebar markdown as html.
 
+Schema:
+```graphql
+type ListItem {
+  item: String @md
+}
+type Frontmatter @infer {
+  sidebar: String @md
+  list: [ListItem!]
+}
+type MarkdownRemark implements Node @infer {
+  frontmatter: Frontmatter!
+}
+```
+
+Query:
 ```graphql
 query {
   allMarkdownRemark(filter: { frontmatter: { templateKey: { eq: "index-template" } } }) {
     html
     frontmatter {
       templateKey
-      sidebar
-    }
-    fields {
-      frontmattermd {
-        sidebar {
+      sidebar {
+        html
+      }
+      list {
+        item {
           html
         }
       }
@@ -80,55 +77,10 @@ query {
 }
 ```
 
-## How it works
-
-This plugin hooks into the `onCreateNode` api and listens for
-new `MarkdownRemark` nodes to be created. If the node has a
-frontmatter object and was not created by this plugin, we
-iterate through all of the valid frontmatter fields,
-creating a new `FrontmatterMarkdownFile` node consisting of
-the MarkdownRemark's File parent fields and the contents
-of the frontmatter field.
-
-The 'gatsby-transformer-remark' plugin has an `onCreateNode`
-hook that recognizes that a new node was created with
-markdown contents. It creates a new MarkdownRemark node
-with the contents of the other node and links them as
-child and parent.
-
-Once the `FrontmatterMarkdownFile` node has been created,
-the child `MarkdownRemark` node is found and attached
-to the `fields.frontmattermd` object in the original
-`MarkdownRemark` node.
-
 ## Possible Issues
 
 Many plugins expect all `MarkdownRemark` nodes to have `File`
-node parents. Because of this plugin, some `MarkdownRemark` nodes
-will have `FrontmatterMarkdownFile` parents. This plugin attempts
-to remain compatible by copying all of the original properties
-of the parent `File` node (if it exists) to the `FrontmatterMarkdownFile`
-node. This works in many cases, but will fail if a plugin checks the type
-of a node rather than the properties on the node.
-
-Two functions are exported to allow checking if a node
-is a `FrontmatterMarkdownFile` node or a child of a
-`FrontmatterMarkdownFile` node. Use these predicates
-in cases where a plugin expects a `MarkdownRemark` node
-with a parent `File` node.
-
-```ts
-export const isFrontmaterMarkdownFileNode: (n: Node) => boolean
-export const isFrontmatterMarkdownNode: (obj: { node: Node, getNode: (id: string) => Node | undefined | null }) => boolean
-```
-
-### Null Page creation
-Some people have seen issues when automatically creating pages from markdown files. See [issue #1](https://github.com/WhiteAbeLincoln/gatsby-transformer-remark-frontmatter/issues/1).
-If you get the error `Your site's "gatsby-node.js" created a page with a component that doesn't exist.`,
-you will need to filter the markdown nodes that are used to create pages. Use the following:
-```
-allMarkdownRemark(filter: { parent: { internal: { type: { ne: "FrontmatterMarkdownFile" }}}}) {
-...
-}
-```
-
+node parents. This plugin passes data through those plugins, but at the
+moment doesn't link the parent node to the original file. This may cause
+some plugins that depend on MarkdownRemark parents to fail
+(such as gatsby-remark-images).

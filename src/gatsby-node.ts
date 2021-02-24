@@ -123,6 +123,7 @@ export const createSchemaCustomization = ({
         resolve: (source, _args, _context, info) => {
           // Grab field
           const value = source[info.fieldName]
+          if (!value) return undefined
           if (typeof value !== 'string') throw new Error('@md can only be used with string values')
           // looking through the gatsby-transformer-remark plugin
           // it seems that the bare minimum it needs is markdown source in the internal.content field
