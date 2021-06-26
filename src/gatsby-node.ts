@@ -1,20 +1,65 @@
-import { CreateSchemaCustomizationArgs } from 'gatsby'
+import { CreateSchemaCustomizationArgs, Node } from 'gatsby'
 import {
   GraphQLFieldConfig,
   GraphQLFieldConfigArgumentMap,
   isObjectType,
   GraphQLFieldResolver,
-} from 'graphql'
-import { ComposeFieldConfig, ComposeOutputType } from 'graphql-compose'
+  GraphQLOutputType,
+} from 'gatsby/graphql'
+import { ComposeOutputType, ObjectTypeComposerFieldConfigDefinition } from 'graphql-compose'
 
-interface GraphQLFieldExtensionDefinition<TSource, TContext, TReturn = any> {
+interface GraphQLFieldExtensionDefinition<TSource, TContext> {
   name: string
-  type?: ComposeOutputType<TReturn, TContext>
+  type?: ComposeOutputType<TContext>
   args?: GraphQLFieldConfigArgumentMap
   extend(
     args: GraphQLFieldConfigArgumentMap,
     prevFieldConfig: GraphQLFieldConfig<TSource, TContext>,
-  ): ComposeFieldConfig<TSource, TContext>
+  ): ObjectTypeComposerFieldConfigDefinition<TSource, TContext>
+}
+
+interface GatsbyNodeModel {
+  findRootNodeAncestor(
+    obj: object | Array<unknown>,
+    predicate?: (n: Node) => boolean,
+  ): Node | null
+  getAllNodes(
+    args: { type?: string | GraphQLOutputType },
+    pageDependencies?: { path: string; connectionType?: string },
+  ): Node[]
+  getNodeById(
+    args: { id: string; type?: string | GraphQLOutputType },
+    pageDependencies?: { path: string; connectionType?: string },
+  ): Node | null
+  getNodesByIds(
+    args: { ids: string[]; type?: string | GraphQLOutputType },
+    pageDependencies?: { path: string; connectionType?: string },
+  ): Node[]
+  getTypes(): string[]
+  getNodesByIds(
+    args: {
+      query: { filter: object; sort?: object }
+      type?: string | GraphQLOutputType
+      firstOnly?: boolean
+    },
+    pageDependencies?: { path: string; connectionType?: string },
+  ): Promise<null | Node | Node[]>
+  trackInlineObjectsInRootNode(node: Node): void
+  trackPageDependencies(
+    result: Node | Node[],
+    pageDependencies?: { path: string; connectionType?: string },
+  ): Node | Node[]
+}
+
+interface GatsbyGraphQLContext<
+  TSource = { [x: string]: string },
+  TArgs = { [x: string]: any }
+> {
+  nodeModel: GatsbyNodeModel
+  defaultFieldResolver: GraphQLFieldResolver<
+    TSource,
+    GatsbyGraphQLContext<TSource, TArgs>
+  >
 }
 
 export const createSchemaCustomization = ({
@@ -54,7 +99,7 @@ export const createSchemaCustomization = ({
             defaultValue: `PLAIN`,
           },
         },
-        resolve: reuseResolver('excerpt')
+        resolve: reuseResolver('excerpt'),
       },
       rawMarkdownBody: 'String',
       html: {
@@ -110,30 +155,43 @@ export const createSchemaCustomization = ({
         type: 'MarkdownWordCount',
         resolve: reuseResolver('wordCount'),
       },
+      parent: {
+        type: 'Node',
+        resolve: (source, _args, context: GatsbyGraphQLContext, info) => {
+          return context.nodeModel.getNodeById({ id: source[info.fieldName] })
+        }
+      }
     },
   })
 
   createTypes(FrontmatterMarkdownField)
 
-  createFieldExtension({
+  const extension: GraphQLFieldExtensionDefinition<{ [x: string]: string }, GatsbyGraphQLContext> = {
     name: 'md',
     extend() {
       return {
         type: 'FrontmatterMarkdownField',
-        resolve: (source, _args, _context, info) => {
+        resolve: (source, args, context, info) => {
           // Grab field
-          const value = source[info.fieldName]
-          if (!value) return undefined
-          if (typeof value !== 'string') throw new Error('@md can only be used with string values')
-          // looking through the gatsby-transformer-remark plugin
-          // it seems that the bare minimum it needs is markdown source in the internal.content field
-          // don't know what other plugins will fail though if this isn't backed by a real file
-          // TODO: support plugins like gatsby-remark-images, gatsby-remark-copy-linked-files
-          // by spoofing a File node
+          const value = context.defaultFieldResolver(
+            source,
+            args,
+            context,
+            info,
+          )
+          if (!value) return null
+          if (typeof value !== 'string')
+            throw new Error('@md can only be used with string values')
+
+          const parent = context.nodeModel.findRootNodeAncestor(source)
+          if (!parent || parent === source) {
+            throw new Error('Unable to find ancestor File node')
+          }
           return {
             rawMarkdownBody: value,
             id: createNodeId(`${info.fieldName} >>> FrontmatterMarkdownField`),
             children: [],
+            parent: parent.id,
             internal: {
               content: value,
               contentDigest: createContentDigest(value), // Used for caching
@@ -144,5 +202,7 @@ export const createSchemaCustomization = ({
         },
       }
     },
-  } as GraphQLFieldExtensionDefinition<{ [x: string]: string }, unknown>)
+  }
+
+  createFieldExtension(extension)
 }

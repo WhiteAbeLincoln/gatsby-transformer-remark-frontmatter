@@ -93,3 +93,6 @@ build/
 .npm-global
 .direnv
 .envrc
+example/public
+/public
+/example/plugins/test-plugin

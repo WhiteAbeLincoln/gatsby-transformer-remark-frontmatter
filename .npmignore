@@ -24,3 +24,8 @@ tslint.json
 .editorconfig
 *.tgz
 patches
+example
+.envrc
+.direnv
+*.nix
+.cache
