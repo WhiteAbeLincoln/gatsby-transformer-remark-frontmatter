@@ -1,7 +1,6 @@
 # gatsby-transformer-remark-frontmatter
 
-Allows querying Markdown frontmatter fields as markdown. Currently only works on top-level string typed keys
-in the frontmatter, but support for string fields in objects or lists can be added if people ask for it enough or someone submits a pull request.
+Allows querying Markdown frontmatter fields as markdown. Works for all string keys in frontmatter, including those that are under lists, as long as you can [define a GraphQL schema](https://www.gatsbyjs.com/docs/reference/graphql-data-layer/schema-customization/).
 
 ## Install
 
@@ -21,6 +20,9 @@ Add the `@md` directive to fields in your GraphQL schema that you want to
 parse as Markdown.
 
 ## Example
+
+Clone the repository and run the [example project](https://github.com/WhiteAbeLincoln/gatsby-transformer-remark-frontmatter/tree/master/example) with
+`npm run run-example`, or read the following:
 
 Given the following markdown file
 
@@ -76,11 +78,3 @@ query {
   }
 }
 ```
-
-## Possible Issues
-
-Many plugins expect all `MarkdownRemark` nodes to have `File`
-node parents. This plugin passes data through those plugins, but at the
-moment doesn't link the parent node to the original file. This may cause
-some plugins that depend on MarkdownRemark parents to fail
-(such as gatsby-remark-images).
