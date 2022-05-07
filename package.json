@@ -25,7 +25,7 @@
   "author": "Abraham White <abelincoln.white@gmail.com>",
   "license": "MIT",
   "peerDependencies": {
-    "gatsby": "^3.6.2",
+    "gatsby": "^3.6.2 || ^4.0.0",
     "graphql": "^14.6.0"
   },
   "devDependencies": {
